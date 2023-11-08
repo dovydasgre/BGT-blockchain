@@ -33,7 +33,7 @@ uint32_t Mix(uint32_t a, uint32_t b, uint32_t c) {
     temp3 = a >> 22 | a << (32 - 22);
     uint32_t s0 = temp3 ^ temp2 ^ temp1;
 
-    return a + s0 + b + s1 + c;// Jūsų Mix funkcijos kodas
+    return a + s0 + b + s1 + c;
 }
 
 std::string customHash(const std::string& input) {
@@ -77,7 +77,6 @@ public:
         : id(id), sender(sender), receiver(receiver), amount(amount) {}
 };
 
-// Function to read users from a file
 std::vector<User> readUsersFromFile(const std::string& filename) {
     std::vector<User> users;
     std::ifstream file(filename);
@@ -99,7 +98,6 @@ std::vector<User> readUsersFromFile(const std::string& filename) {
     return users;
 }
 
-// Function to read transactions from a file
 std::vector<Transaction> readTransactionsFromFile(const std::string& filename) {
     std::vector<Transaction> transactions;
     std::ifstream file(filename);
@@ -140,7 +138,7 @@ public:
 
 private:
     std::string mineBlock() {
-        std::string target(2, '0'); // Paprastumo dėlei naudosime tik du nulius kaip tikslą
+        std::string target(2, '0');
         std::string data = std::to_string(index) + previous_hash + std::to_string(timestamp) + std::to_string(nonce);
 
         for (const Transaction& transaction : transactions) {
@@ -159,7 +157,7 @@ private:
 
 std::vector<Transaction> selectRandomTransactions(const std::vector<Transaction>& allTransactions, int count) {
     if (count >= allTransactions.size()) {
-        return allTransactions;  // If there are fewer than 100 transactions, return all of them
+        return allTransactions; 
     }
 
     std::vector<Transaction> randomTransactions;
@@ -211,14 +209,11 @@ int main() {
 
     std::vector<User> users = readUsersFromFile("users.txt");
 
-    // Read transactions from transactions.txt
     std::vector<Transaction> allTransactions = readTransactionsFromFile("transactions.txt");
      std::vector<Transaction> randomTransactions = selectRandomTransactions(allTransactions, 100);
      
-    // Pridėkime naują bloką prie blokų grandinės
     blockchain.addBlock(randomTransactions);
 
-    // Spausdiname blokų grandinę
     blockchain.printChain();
 
     return 0;
