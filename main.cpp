@@ -4,18 +4,15 @@
 #include <ctime>
 #include <sstream>
 #include <chrono>
-#include <iostream>
-#include <vector>
-#include <string>
 #include <fstream>
-#include <random>
 #include <algorithm>
 #include <iomanip>
-#include <bitset>
-#include <sstream>
 #include <omp.h>
-#include <cstdlib>
-#include <ctime>
+#include <random>
+
+using namespace std;
+
+#define THREAD_NUM 5
 
 const uint32_t HASH_CODE[] = {
     0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
@@ -36,7 +33,7 @@ uint32_t Mix(uint32_t a, uint32_t b, uint32_t c) {
     return a + s0 + b + s1 + c;
 }
 
-std::string customHash(const std::string& input) {
+string customHash(const string& input) {
     uint32_t hash[8];
 
     memcpy(hash, HASH_CODE, sizeof(HASH_CODE));
@@ -56,165 +53,304 @@ std::string customHash(const std::string& input) {
     return result;
 }
 
+string unixTimeToHumanReadable(time_t timestamp) {
+    struct tm* localTime = gmtime(&timestamp);
+
+    if (localTime != nullptr) {
+        char buffer[80];
+        strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", localTime);
+        return string(buffer);
+    }
+
+    return "Invalid Time";
+}
+
 class User {
 public:
-    std::string name;
-    std::string public_key;
+    string name;
+    string public_key;
     double balance;
 
-    User(const std::string& name, const std::string& public_key, double balance)
+    User() : name(""), public_key(""), balance(0.0) {}
+
+    User(const string& name, const string& public_key, double balance)
         : name(name), public_key(public_key), balance(balance) {}
 };
 
 class Transaction {
 public:
-    std::string id;
-    std::string sender;
-    std::string receiver;
-    double amount;
+    string transactionId = "";
+    string sender;
+    string receiver;
+    double sum;
 
-    Transaction(std::string id, const std::string& sender, const std::string& receiver, double amount)
-        : id(id), sender(sender), receiver(receiver), amount(amount) {}
+    Transaction() : transactionId(""), sender(""), receiver(""), sum(0.0) {}
+
+    Transaction(const string& transactionId, const string& sender, const string& receiver, double sum)
+        : transactionId(transactionId), sender(sender), receiver(receiver), sum(sum) {}
 };
-
-std::vector<User> readUsersFromFile(const std::string& filename) {
-    std::vector<User> users;
-    std::ifstream file(filename);
-
-    if (file.is_open()) {
-        std::string line;
-        while (std::getline(file, line)) {
-            std::istringstream iss(line);
-            std::string name, public_key;
-            double balance;
-            iss >> name >> public_key >> balance;
-            users.emplace_back(name, public_key, balance);
-        }
-        file.close();
-    } else {
-        std::cerr << "Failed to open " << filename << std::endl;
-    }
-
-    return users;
-}
-
-std::vector<Transaction> readTransactionsFromFile(const std::string& filename) {
-    std::vector<Transaction> transactions;
-    std::ifstream file(filename);
-
-    if (file.is_open()) {
-        std::string line;
-        while (std::getline(file, line)) {
-            std::istringstream iss(line);
-            std::string id;
-            std::string sender, receiver;
-            double amount;
-            iss >> id >> sender >> receiver >> amount;
-            transactions.emplace_back(id, sender, receiver, amount);
-        }
-        file.close();
-    } else {
-        std::cerr << "Failed to open " << filename << std::endl;
-    }
-
-    return transactions;
-}
 
 class Block {
 public:
-    int index;
-    std::string previous_hash;
-    time_t timestamp;
-    int nonce;
-    std::vector<Transaction> transactions;
-    std::string hash;
+    string hash;
+    vector<Transaction> transactions;
 
-    Block(int index, const std::string& previous_hash, const std::vector<Transaction>& transactions)
-        : index(index), previous_hash(previous_hash), transactions(transactions) {
-        timestamp = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
-        nonce = 0;
-        hash = mineBlock();
-    }
+    Block() : hash("") {}
 
-private:
-    std::string mineBlock() {
-        std::string target(2, '0');
-        std::string data = std::to_string(index) + previous_hash + std::to_string(timestamp) + std::to_string(nonce);
-
-        for (const Transaction& transaction : transactions) {
-            data += transaction.id + transaction.sender + transaction.receiver + std::to_string(transaction.amount);
-        }
-
-        std::string hash;
-        do {
-            nonce++;
-            hash = customHash(data + std::to_string(nonce));
-        } while (hash.substr(0, 2) != target);
-
-        return hash;
+    void addTransactions(const vector<Transaction>& newTransactions) {
+        transactions.insert(transactions.end(), newTransactions.begin(), newTransactions.end());
     }
 };
-
-std::vector<Transaction> selectRandomTransactions(const std::vector<Transaction>& allTransactions, int count) {
-    if (count >= allTransactions.size()) {
-        return allTransactions; 
-    }
-
-    std::vector<Transaction> randomTransactions;
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<int> dist(0, allTransactions.size() - 1);
-
-    for (int i = 0; i < count; ++i) {
-        int randomIndex = dist(gen);
-        randomTransactions.push_back(allTransactions[randomIndex]);
-    }
-
-    return randomTransactions;
-}
 
 class Blockchain {
 public:
-    Blockchain() {
-        chain_.push_back(createGenesisBlock());
-    }
+    string prevHash;
+    int timestamp;
+    string version;
+    string merkelRoot;
+    int nonce;
+    string diff;
+    Block block;
 
-    void addBlock(const std::vector<Transaction>& transactions) {
-        int index = chain_.size();
-        const std::string& previous_hash = chain_.back().hash;
-        chain_.push_back(Block(index, previous_hash, transactions));
-    }
-
-    void printChain() {
-        for (const Block& block : chain_) {
-            std::cout << "Block Index: " << block.index << std::endl;
-            std::cout << "Previous Hash: " << block.previous_hash << std::endl;
-            std::cout << "Timestamp: " << ctime(&block.timestamp) << std::endl;
-            std::cout << "Nonce: " << block.nonce << std::endl;
-            std::cout << "Hash: " << block.hash << std::endl;
-            std::cout << "Transactions:" << std::endl;
-        }
-    }
-
-private:
-    std::vector<Block> chain_;
-
-    Block createGenesisBlock() {
-        return Block(0, "0", std::vector<Transaction>());
+    void initialize(const string& prevHash, int timestamp, const string& version, const string& merkelRoot, int nonce, const string& diff) {
+        this->prevHash = prevHash;
+        this->timestamp = timestamp;
+        this->version = version;
+        this->merkelRoot = merkelRoot;
+        this->nonce = nonce;
+        this->diff = diff;
     }
 };
 
+void readUsers(vector<User> &con) {
+    ifstream df("Users.txt");
+    if (df.is_open()) {
+        User u;
+        while (df >> u.name >> u.public_key >> u.balance) {
+            con.push_back(u);
+        }
+        df.close();
+    }
+}
+
+void readTrans(vector<Transaction> &con) {
+    ifstream df("transactions.txt");
+    if (df.is_open()) {
+        Transaction t;
+        while (df >> t.sum >> t.sender >> t.receiver >> t.transactionId) {
+            con.push_back(t);
+        }
+        df.close();
+    }
+}
+
+bool verifyTransaction(const Transaction& trans, const vector<User>& users) {
+    User sender, receiver;
+    for (const User& user : users) {
+        if (user.public_key == trans.sender) {
+            sender = user;
+        }
+        if (user.public_key == trans.receiver) {
+            receiver = user;
+        }
+    }
+
+    if (sender.balance >= trans.sum) {
+        return true;
+    }
+
+    return false;
+}
+
+void verifyTransactions(vector<Transaction>& trans, const vector<User>& users) {
+    vector<Transaction> validTrans;
+    for (const Transaction& t : trans) {
+        if (verifyTransaction(t, users)) {
+            validTrans.push_back(t);
+        }
+    }
+    trans = validTrans;
+}
+
+string generateMerkleRoot(vector<Transaction> trans) {
+  vector<string> merkel, merkel2;
+  string word, hash;
+
+  for(unsigned int i = 0; i < trans.size(); i++) {
+    merkel.push_back(trans.at(i).transactionId);
+  }
+
+  while (merkel.size() > 1) {
+    if (merkel.size() % 2 == 0) {
+      for (unsigned i = 0; i < merkel.size(); i+=2) {
+        word = merkel.at(i) + merkel.at(i+1);
+        hash = customHash(word);
+        merkel2.push_back(hash);
+      }
+    } else {
+      for (unsigned i = 0; i < merkel.size() - 1; i+=2) {
+        word = merkel.at(i) + merkel.at(i+1);
+        hash = customHash(word);
+        merkel2.push_back(hash);
+      } 
+
+      word = merkel.at(merkel.size()-1);
+      hash = customHash(word);
+      merkel2.push_back(hash);
+    }
+
+    merkel.clear();
+    merkel = merkel2;
+    merkel2.clear();
+  }
+
+  return merkel.at(0);
+}
+
+string mineBlock(Blockchain &bc, string prevHash, int b) {
+    string newHash;
+    int threadCount = omp_get_num_threads();
+    int threadNum = omp_get_thread_num();
+    int nonce = threadNum;
+
+    if (b == 0) {
+        bc.prevHash = customHash("");
+    } else {
+        bc.prevHash = prevHash;
+    }
+
+
+    string target = bc.diff;
+
+    while (newHash.substr(0, 3) != target) { 
+        newHash = customHash(bc.diff + bc.merkelRoot + bc.prevHash + to_string(bc.timestamp) + bc.version + to_string(nonce));
+
+        nonce += threadCount;
+    }
+
+    bc.block.hash = newHash;
+    bc.timestamp = time(nullptr);
+    bc.nonce = nonce;
+    return newHash;
+}
+
+void printBlock(Blockchain bc, int nr) {
+  cout << "------------------------- #" << nr+1 << " BLOCK -------------------------" << endl;
+  cout << "Block hash: " << bc.block.hash << endl;
+  cout << "Previous block hash: " << bc.prevHash << endl;
+  cout << "Version: " << bc.version << endl;
+  cout << "Merkle Root: " << bc.merkelRoot.substr(0, 64) << endl;
+  cout << "Nonce: " << bc.nonce << endl;
+  cout << "Mined on: " << unixTimeToHumanReadable(bc.timestamp) << " (GMT+2)" << endl;
+  cout << "Difficulty: " << bc.diff << endl;
+  cout << "----------------------------------------------------------" << endl;
+}
+
+void printTrans(Transaction t) {
+  cout << "---------------------- TRANSACTION ----------------------" << endl;
+  cout << "ID: " << t.transactionId << endl;
+  cout << "Sender: " << t.sender << endl;
+  cout << "Receiver: " << t.receiver << endl;
+  cout << "Amount: " << t.sum << endl;
+  cout << "---------------------------------------------------------" << endl;
+}
+
+void usersData(const vector<User>& users) {
+    ofstream wf("UsersRez.txt");
+    for (const User& user : users) {
+        wf << user.name << endl;
+        wf << user.public_key << endl;
+        wf << fixed << setprecision(2) << user.balance << endl;
+        wf << endl;
+    }
+    wf.close();
+}
+
 int main() {
-    Blockchain blockchain;
+  bool stop = 0;
+  string temp;
+  vector<User> users;
+  vector<Transaction> trans;
+  vector<Blockchain> bc;
+  bc.reserve(100);
+  random_device rd;
+  mt19937 gen(rd());
 
-    std::vector<User> users = readUsersFromFile("users.txt");
+  omp_set_num_threads(THREAD_NUM);
 
-    std::vector<Transaction> allTransactions = readTransactionsFromFile("transactions.txt");
-     std::vector<Transaction> randomTransactions = selectRandomTransactions(allTransactions, 100);
-     
-    blockchain.addBlock(randomTransactions);
+  readUsers(users);
+  readTrans(trans);
 
-    blockchain.printChain();
+  for (int i = 0; i < 5; i++) {
+        stop = 0;
+        Blockchain newBC;
+        while (newBC.block.transactions.size() != 100 && !trans.empty()) {
+            uniform_int_distribution<> distr(0, trans.size() - 1);
+            int random = distr(gen);
 
-    return 0;
+            if (verifyTransaction(trans[random], users)) {
+                newBC.block.transactions.push_back(trans[random]);
+            }
+
+            trans.erase(trans.begin() + random);
+        }
+        bc.push_back(newBC);
+    }
+
+    int limit = 50000, mined = 0;
+    int who = -1;
+
+while (mined != 5) {
+    stop = false;
+    #pragma omp parallel num_threads(THREAD_NUM) shared(mined, stop, bc, who)
+    {
+        int nonce;
+        string temp;
+        bc[mined].version = "v" + to_string(mined + 1) + ".0";
+        bc[mined].diff = "000";
+        bc[mined].merkelRoot = generateMerkleRoot(bc[mined].block.transactions);
+
+        nonce = limit * omp_get_thread_num();
+
+        temp = mineBlock(bc[mined], (mined == 0) ? "" : bc[mined - 1].block.hash, mined);
+        if (temp.size() > 2) {
+            #pragma omp critical
+            {
+                if (who == -1) {
+                    who = omp_get_thread_num(); 
+                    bc[mined].block.hash = temp;
+                    stop = true;
+                    bc[mined].nonce = nonce;
+                }
+            }
+        }
+    }
+
+    if (bc[mined].block.hash.length() > 1 && who != -1) {
+          cout << "MINED BY " << who << " THREAD" << endl;
+            for (auto tran : bc[mined].block.transactions) {
+                int send = 0, get = 0;
+                for (int i = 0; i < 1000; i++) {
+                    if (users[i].public_key == tran.sender)
+                        send = i;
+                    else if (users[i].public_key == tran.receiver)
+                        get = i;
+                    if (send != 0 && get != 0)
+                        break;
+                }
+
+                if (users[send].balance >= tran.sum) {
+                    users[send].balance -= tran.sum;
+                    users[get].balance += tran.sum;
+                }
+            }
+            printBlock(bc[mined], mined);
+            mined++;
+            who = -1;
+        }
+    }
+
+    usersData(users);
+
+  return 0;
 }
