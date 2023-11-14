@@ -1,4 +1,3 @@
-# BGT-blockchain
 # Blokų grandinių 2 užduotis
 Centralizuota blokų grandinė
 ## Įdiegimo ir naudojimosi instrukcija
