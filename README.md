@@ -2,7 +2,7 @@
 # Blokų grandinių 2 užduotis
 Centralizuota blokų grandinė
 ## Įdiegimo ir naudojimosi instrukcija
-- git clone https://github.com/Matas-V/blockchain.git
+- git clone https://github.com/dovydasgre/BGT-blockchain.git
 - Atsidaryti projektą VS code aplinkoje
 - Konsolėje (CMD) parašyti komandą *g++ -o main main.cpp -fopenmp*
 - Konsolėje (CMD) paleisti sukompiliuotą main.exe tipo programą su komanda *./main*
